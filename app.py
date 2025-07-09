@@ -99,8 +99,8 @@ if file1 and file2:
                     right_on="PartNumber",
                     how="left"
                 ).drop(columns=["PartNumber"])
-        except Exception as e:
-            st.warning(f"Bin location merge skipped due to error: {e}")
+            except Exception as e:
+                st.warning(f"Bin location merge skipped due to error: {e}")
         
         st.warning(f"Bin location merge skipped due to error: {e}")
         st.success(f"{len(df_results)} matches found.")
