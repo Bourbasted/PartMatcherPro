@@ -83,11 +83,14 @@ if file1 and file2:
 
         df_results = pd.DataFrame(results)
         possible_bin_columns = ["BinLocation", "Location", "Location #", "Bin", "Storage"]
-        bin_col = next((col for col in df2.columns if col.strip().lower() in [x.lower() for x in possible_bin_columns]), None)
+        possible_partnumber_columns = ["PartNumber", "Part #", "Part No", "Part_Number"]
 
-        if bin_col:
+        bin_col = next((col for col in df2.columns if col.strip().lower() in [x.lower() for x in possible_bin_columns]), None)
+        pn_col = next((col for col in df2.columns if col.strip().lower() in [x.lower() for x in possible_partnumber_columns]), None)
+
+        if bin_col and pn_col:
             try:
-                bin_map = df2[["PartNumber", bin_col]].dropna()
+                bin_map = df2[[pn_col, bin_col]].dropna()
                 bin_map.columns = ["PartNumber", "BinLocation"]
 
                 df_results = df_results.merge(
@@ -96,8 +99,8 @@ if file1 and file2:
                     right_on="PartNumber",
                     how="left"
                 ).drop(columns=["PartNumber"])
-            except Exception as e:
-                st.warning(f"Bin location merge skipped due to error: {e}")
+        except Exception as e:
+            st.warning(f"Bin location merge skipped due to error: {e}")
         
         st.warning(f"Bin location merge skipped due to error: {e}")
         st.success(f"{len(df_results)} matches found.")
