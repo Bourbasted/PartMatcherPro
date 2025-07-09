@@ -93,12 +93,18 @@ if file1 and file2:
                 bin_map = df2[[pn_col, bin_col]].dropna()
                 bin_map.columns = ["PartNumber", "BinLocation"]
 
-                df_results = df_results.merge(
-                    bin_map,
-                    left_on="Adtrans_PartNumber",
-                    right_on="PartNumber",
-                    how="left"
-                ).drop(columns=["PartNumber"])
+                # Dynamically find which part number column to use for matching
+                merge_key = next((col for col in df_results.columns if "PartNumber" in col and "Catalogue" not in col), None)
+
+                if merge_key:
+                    df_results = df_results.merge(
+                        bin_map,
+                        left_on=merge_key,
+                        right_on="PartNumber",
+                        how="left"
+                    ).drop(columns=["PartNumber"])
+                else:
+                    st.warning("Could not find appropriate part number column for bin location merge.")
             except Exception as e:
                 st.warning(f"Bin location merge skipped due to error: {e}")
         
