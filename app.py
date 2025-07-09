@@ -1,0 +1,92 @@
+
+import streamlit as st
+import pandas as pd
+import numpy as np
+from openai import OpenAI
+from sklearn.metrics.pairwise import cosine_similarity
+
+st.title("Parts Matcher Pro: Smart Column Version")
+
+# Load API key from secrets
+openai_api_key = st.secrets["OPENAI_API_KEY"]
+client = OpenAI(api_key=openai_api_key)
+
+def get_embedding(text):
+    try:
+        response = client.embeddings.create(
+            input=text,
+            model="text-embedding-3-small"
+        )
+        return response.data[0].embedding
+    except Exception as e:
+        st.error(f"Embedding failed: {e}")
+        return None
+
+def detect_text_columns(df):
+    candidates = []
+    for col in df.columns:
+        if df[col].dtype == object:
+            if any(keyword in col.lower() for keyword in ["desc", "detail", "text", "note"]):
+                candidates.append(col)
+    return candidates if candidates else df.select_dtypes(include="object").columns.tolist()
+
+def get_column_selection(df, label, default_col=None):
+    return st.selectbox(
+        f"Select the description column for {label}",
+        df.columns.tolist(),
+        index=df.columns.get_loc(default_col) if default_col and default_col in df.columns else 0
+    )
+
+# File uploads
+file1 = st.file_uploader("Upload First Spreadsheet", type=["xlsx", "csv"])
+file2 = st.file_uploader("Upload Second Spreadsheet", type=["xlsx", "csv"])
+
+threshold = st.slider("Similarity Threshold", 0.0, 1.0, 0.6, 0.05)
+top_n_matches = st.number_input("Top N Matches per Item", min_value=1, max_value=10, value=3)
+
+if file1 and file2:
+    df1 = pd.read_excel(file1) if file1.name.endswith("xlsx") else pd.read_csv(file1)
+    df2 = pd.read_excel(file2) if file2.name.endswith("xlsx") else pd.read_csv(file2)
+
+    col1_candidates = detect_text_columns(df1)
+    col2_candidates = detect_text_columns(df2)
+
+    col1 = get_column_selection(df1, "File 1", col1_candidates[0] if col1_candidates else None)
+    col2 = get_column_selection(df2, "File 2", col2_candidates[0] if col2_candidates else None)
+
+    df1_clean = df1[[col1]].dropna().rename(columns={col1: "Description"})
+    df2_clean = df2[[col2]].dropna().rename(columns={col2: "Description"})
+
+    df1_clean["Embedding"] = df1_clean["Description"].apply(get_embedding)
+    df2_clean["Embedding"] = df2_clean["Description"].apply(get_embedding)
+
+    emb1 = np.array(df1_clean["Embedding"].tolist())
+    emb2 = np.array(df2_clean["Embedding"].tolist())
+
+    if emb1.ndim == 2 and emb2.ndim == 2:
+        sim_matrix = cosine_similarity(emb1, emb2)
+
+        results = []
+        for i, row in enumerate(sim_matrix):
+            top_indices = row.argsort()[-top_n_matches:][::-1]
+            for j in top_indices:
+                score = row[j]
+                if score >= threshold:
+                    desc1 = df1_clean.iloc[i]["Description"]
+                    desc2 = df2_clean.iloc[j]["Description"]
+                    shared = set(desc1.lower().split()).intersection(set(desc2.lower().split()))
+                    results.append({
+                        "File1_Description": desc1,
+                        "File2_Description": desc2,
+                        "Similarity": round(score, 3),
+                        "Shared_Keywords": ", ".join(shared)
+                    })
+
+        df_results = pd.DataFrame(results)
+        st.success(f"{len(df_results)} matches found.")
+        st.dataframe(df_results.head(50))
+
+        csv = df_results.to_csv(index=False)
+        st.download_button("Download CSV", csv, "smart_matches.csv", "text/csv")
+    else:
+        st.error("Embedding failed for one or both files. Please check your API key and input format.")
