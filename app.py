@@ -102,7 +102,9 @@ if file1 and file2:
                         left_on=merge_key,
                         right_on="PartNumber",
                         how="left"
-                    ).drop(columns=["PartNumber"])
+                    )
+                    if "PartNumber" in df_results.columns:
+                        df_results = df_results.drop(columns=["PartNumber"])
                 else:
                     st.warning("Could not find appropriate part number column for bin location merge.")
             except Exception as e:
