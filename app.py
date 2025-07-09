@@ -88,33 +88,35 @@ if file1 and file2:
         bin_col = next((col for col in df2.columns if col.strip().lower() in [x.lower() for x in possible_bin_columns]), None)
         pn_col = next((col for col in df2.columns if col.strip().lower() in [x.lower() for x in possible_partnumber_columns]), None)
 
-        if bin_col and pn_col:
+        # 🔧 Debugging aid: show available columns in df_results
+        st.write("Available columns in df_results:", df_results.columns.tolist())
+
+        merge_key_candidates = [
+            Col for col in df_results.columns
+            if "PartNumber" in col and "Catalogue" not in col
+        ]
+        merge_key = merge_key_candidates[0] if merge_key_candidates else None
+
+        if merge_key and bin_col and pn_col:
             try:
                 bin_map = df2[[pn_col, bin_col]].dropna()
                 bin_map.columns = ["PartNumber", "BinLocation"]
 
-                # Dynamically detect which column in df_results holds the Adtrans (or non-catalogue) part number
-                merge_key_candidates = [
-                    col for col in df_results.columns
-                    if "PartNumber" in col and "Catalogue" not in col
-                ]
-                merge_key = merge_key_candidates[0] if merge_key_candidates else None
+                st.write(f"Using merge key: {merge_key}")
 
-                if merge_key:
-                    df_results = df_results.merge(
-                        bin_map,
-                        left_on=merge_key,
-                        right_on="PartNumber",
-                        how="left"
-                    )
-                    if "PartNumber" in df_results.columns:
-                        df_results = df_results.drop(columns=["PartNumber"])
-                else:
-                    st.warning("Could not find appropriate part number column for bin location merge.")
+                df_results = df_results.merge(
+                    bin_map,
+                    left_on=merge_key,
+                    right_on="PartNumber",
+                    how="left"
+                )
+                if "PartNumber" in df_results.columns:
+                    df_results = df_results.drop(columns=["PartNumber"])
             except Exception as e:
                 st.warning(f"Bin location merge skipped due to error: {e}")
-        
-        st.warning(f"Bin location merge skipped due to error: {e}")
+        else:
+            st.warning("Could not find appropriate part number column for bin location merge.")
+            
         st.success(f"{len(df_results)} matches found.")
         st.dataframe(df_results.head(50))
 
